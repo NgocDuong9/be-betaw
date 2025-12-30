@@ -11,7 +11,7 @@ import {
 import { PaginatedResponse } from '../common/interfaces';
 
 interface ProductFilter {
-  isActive: boolean;
+  isActive?: boolean;
   $or?: Array<{ [key: string]: { $regex: string; $options: string } }>;
   category?: ProductCategory;
   price?: { $gte?: number; $lte?: number };
@@ -41,7 +41,13 @@ export class ProductsService {
       brand,
     } = query;
 
-    const filter: ProductFilter = { isActive: true };
+    const filter: ProductFilter = {};
+    
+    if (query.isActive !== undefined) {
+      filter.isActive = query.isActive;
+    } else {
+      filter.isActive = true;
+    }
 
     // Search filter
     if (search) {
@@ -217,4 +223,37 @@ export class ProductsService {
   async deleteAll(): Promise<void> {
     await this.productModel.deleteMany({}).exec();
   }
+
+  async count(): Promise<number> {
+    return this.productModel.countDocuments({ isActive: true }).exec();
+  }
+
+  async getStatistics() {
+    const [total, byCategory, lowStock] = await Promise.all([
+      this.productModel.countDocuments({ isActive: true }).exec(),
+      this.productModel.aggregate([
+        { $match: { isActive: true } },
+        {
+          $group: {
+            _id: '$category',
+            count: { $sum: 1 },
+            avgPrice: { $avg: '$price' },
+          },
+        },
+      ]),
+      this.productModel.countDocuments({ isActive: true, stock: { $lt: 10 } }).exec(),
+    ]);
+
+    const categoryStats: Record<string, { count: number; avgPrice: number }> = {};
+    byCategory.forEach((c) => {
+      categoryStats[c._id] = { count: c.count, avgPrice: c.avgPrice };
+    });
+
+    return {
+      total,
+      byCategory: categoryStats,
+      lowStock,
+    };
+  }
 }
+

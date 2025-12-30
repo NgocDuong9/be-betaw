@@ -9,6 +9,12 @@ import { Order, OrderDocument, OrderStatus } from './schemas/order.schema';
 import { CreateOrderDto, UpdateOrderDto } from './dto';
 import { ProductsService } from '../products/products.service';
 
+interface AdminOrderQuery {
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -163,4 +169,103 @@ export class OrdersService {
 
     return stats[0] || { totalOrders: 0, totalRevenue: 0, avgOrderValue: 0 };
   }
+
+  // ============ ADMIN METHODS ============
+
+  async findAllAdmin(query: AdminOrderQuery) {
+    const { status, page = 1, limit = 20 } = query;
+    const skip = (page - 1) * limit;
+
+    const filter: Record<string, unknown> = {};
+    if (status) {
+      filter.status = status;
+    }
+
+    const [orders, total] = await Promise.all([
+      this.orderModel
+        .find(filter)
+        .populate('userId', 'firstName lastName email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.orderModel.countDocuments(filter).exec(),
+    ]);
+
+    return {
+      orders,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async findByIdAdmin(id: string): Promise<OrderDocument> {
+    const order = await this.orderModel
+      .findById(id)
+      .populate('userId', 'firstName lastName email phone')
+      .exec();
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return order;
+  }
+
+  async updateStatusAdmin(id: string, status: string): Promise<OrderDocument> {
+    const validStatuses = Object.values(OrderStatus);
+    if (!validStatuses.includes(status as OrderStatus)) {
+      throw new BadRequestException(`Invalid status: ${status}`);
+    }
+
+    const order = await this.orderModel
+      .findByIdAndUpdate(id, { status }, { new: true })
+      .exec();
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    return order;
+  }
+
+  async getStatistics() {
+    const [total, byStatus, revenue] = await Promise.all([
+      this.orderModel.countDocuments().exec(),
+      this.orderModel.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      this.orderModel.aggregate([
+        {
+          $match: { status: { $ne: OrderStatus.CANCELLED } },
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$total' },
+            avgOrderValue: { $avg: '$total' },
+          },
+        },
+      ]),
+    ]);
+
+    const statusCounts: Record<string, number> = {};
+    byStatus.forEach((s) => {
+      statusCounts[s._id] = s.count;
+    });
+
+    return {
+      total,
+      byStatus: statusCounts,
+      revenue: revenue[0] || { totalRevenue: 0, avgOrderValue: 0 },
+    };
+  }
 }
+

@@ -2,11 +2,13 @@ import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
+import * as bcrypt from 'bcryptjs';
 import {
   Product,
   ProductDocument,
   ProductCategory,
 } from '../products/schemas/product.schema';
+import { User, UserDocument, UserRole } from '../users/schemas/user.schema';
 
 @Injectable()
 export class SeederService implements OnModuleInit {
@@ -14,13 +16,41 @@ export class SeederService implements OnModuleInit {
 
   constructor(
     @InjectModel(Product.name) private productModel: Model<ProductDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     private configService: ConfigService,
   ) {}
 
   async onModuleInit() {
     if (this.configService.get('NODE_ENV') !== 'production') {
       await this.seedProducts();
+      await this.seedAdminUser();
     }
+  }
+
+  async seedAdminUser() {
+    const adminEmail = 'admin@betawatch.com';
+    const existingAdmin = await this.userModel.findOne({ email: adminEmail });
+    
+    if (existingAdmin) {
+      this.logger.log('Admin user already exists, skipping...');
+      return;
+    }
+
+    this.logger.log('Creating admin user...');
+    
+    const hashedPassword = await bcrypt.hash('Admin@123', 10);
+    
+    const admin = new this.userModel({
+      firstName: 'Admin',
+      lastName: 'BetaWatch',
+      email: adminEmail,
+      password: hashedPassword,
+      role: UserRole.ADMIN,
+      isActive: true,
+    });
+
+    await admin.save();
+    this.logger.log('Admin user created: admin@betawatch.com / Admin@123');
   }
 
   async seedProducts() {

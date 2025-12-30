@@ -6,7 +6,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
-import { User, UserDocument } from './schemas/user.schema';
+import { User, UserDocument, UserRole } from './schemas/user.schema';
 import { CreateUserDto, UpdateUserDto } from './dto';
 
 @Injectable()
@@ -77,4 +77,34 @@ export class UsersService {
   ): Promise<boolean> {
     return bcrypt.compare(plainPassword, hashedPassword);
   }
+
+  // Admin methods
+  async toggleActive(id: string, isActive: boolean): Promise<UserDocument> {
+    const user = await this.userModel
+      .findByIdAndUpdate(id, { isActive }, { new: true })
+      .exec();
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  async setRole(id: string, role: UserRole): Promise<UserDocument> {
+    const user = await this.userModel
+      .findByIdAndUpdate(id, { role }, { new: true })
+      .exec();
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
+  }
+
+  async count(): Promise<number> {
+    return this.userModel.countDocuments().exec();
+  }
 }
+

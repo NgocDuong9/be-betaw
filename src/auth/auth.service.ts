@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { RegisterDto } from './dto';
@@ -16,17 +16,27 @@ export class AuthService {
     password: string,
   ): Promise<UserDocument | null> {
     const user = await this.usersService.findByEmail(email);
-    if (
-      user &&
-      (await this.usersService.validatePassword(password, user.password))
-    ) {
+    if (!user) {
+      return null;
+    }
+    
+    // Check if user is active
+    if (!user.isActive) {
+      throw new ForbiddenException('Your account has been deactivated. Please contact support.');
+    }
+
+    if (await this.usersService.validatePassword(password, user.password)) {
       return user;
     }
     return null;
   }
 
   async login(user: UserDocument) {
-    const payload = { email: user.email, sub: user._id.toString() };
+    const payload = { 
+      email: user.email, 
+      sub: user._id.toString(),
+      role: user.role,
+    };
     return {
       user: user.toJSON(),
       accessToken: this.jwtService.sign(payload),
@@ -35,7 +45,11 @@ export class AuthService {
 
   async register(registerDto: RegisterDto) {
     const user = await this.usersService.create(registerDto);
-    const payload = { email: user.email, sub: user._id.toString() };
+    const payload = { 
+      email: user.email, 
+      sub: user._id.toString(),
+      role: user.role,
+    };
     return {
       user: user.toJSON(),
       accessToken: this.jwtService.sign(payload),
@@ -47,6 +61,10 @@ export class AuthService {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
+    if (!user.isActive) {
+      throw new ForbiddenException('Your account has been deactivated');
+    }
     return user;
   }
 }
+

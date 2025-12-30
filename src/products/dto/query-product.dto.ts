@@ -41,4 +41,9 @@ export class QueryProductDto extends PaginationDto {
   @IsOptional()
   @IsString()
   brand?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Boolean)
+  isActive?: boolean;
 }
