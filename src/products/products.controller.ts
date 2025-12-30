@@ -25,7 +25,9 @@ import { ProductCategory } from './schemas/product.schema';
 @ApiTags('Products')
 @Controller('products')
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get all products with filtering and pagination' })

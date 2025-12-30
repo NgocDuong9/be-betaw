@@ -213,4 +213,8 @@ export class ProductsService {
   async getBrands(): Promise<string[]> {
     return this.productModel.distinct('brand', { isActive: true }).exec();
   }
+
+  async deleteAll(): Promise<void> {
+    await this.productModel.deleteMany({}).exec();
+  }
 }
