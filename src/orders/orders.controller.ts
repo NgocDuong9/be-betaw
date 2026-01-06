@@ -111,6 +111,19 @@ export class OrdersController {
     };
   }
 
+  @Get('admin/:id')
+  @ApiOperation({ summary: 'Get order by ID (Admin)' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiResponse({ status: 200, description: 'Order found' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async findOneAdmin(@Param('id') id: string) {
+    const order = await this.ordersService.findById(id);
+    return {
+      success: true,
+      data: order,
+    };
+  }
+
   @Put('admin/:id')
   @ApiOperation({ summary: 'Update order status (Admin)' })
   @ApiParam({ name: 'id', type: String })

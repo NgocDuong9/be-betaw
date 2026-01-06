@@ -99,6 +99,11 @@ export class OrdersService {
   }
 
   async findById(id: string): Promise<OrderDocument> {
+    // Validate ObjectId format
+    if (!Types.ObjectId.isValid(id)) {
+      throw new NotFoundException('Order not found');
+    }
+
     const order = await this.orderModel.findById(id).exec();
     if (!order) {
       throw new NotFoundException('Order not found');
@@ -107,9 +112,14 @@ export class OrdersService {
   }
 
   async findByIdAndUser(id: string, userId: string): Promise<OrderDocument> {
+    // Validate ObjectId format
+    if (!Types.ObjectId.isValid(id) || !Types.ObjectId.isValid(userId)) {
+      throw new NotFoundException('Order not found');
+    }
+
     const order = await this.orderModel
       .findOne({
-        _id: id,
+        _id: new Types.ObjectId(id),
         userId: new Types.ObjectId(userId),
       })
       .exec();
