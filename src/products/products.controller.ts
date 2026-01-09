@@ -18,7 +18,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { ProductsService } from './products.service';
-import { CreateProductDto, UpdateProductDto, QueryProductDto } from './dto';
+import { CreateProductDto, UpdateProductDto, QueryProductDto, QueryLatestProductDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProductCategory } from './schemas/product.schema';
 
@@ -38,11 +38,10 @@ export class ProductsController {
   }
 
   @Get('latest')
-  @ApiOperation({ summary: 'Get latest/new arrival products' })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOperation({ summary: 'Get latest/new arrival products with optional filters' })
   @ApiResponse({ status: 200, description: 'Latest products retrieved' })
-  async findLatest(@Query('limit') limit?: number) {
-    const data = await this.productsService.findLatest(limit || 8);
+  async findLatest(@Query() query: QueryLatestProductDto) {
+    const data = await this.productsService.findLatest(query);
     return {
       success: true,
       data,

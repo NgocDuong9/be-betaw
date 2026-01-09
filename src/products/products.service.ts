@@ -6,16 +6,18 @@ import {
   CreateProductDto,
   UpdateProductDto,
   QueryProductDto,
+  QueryLatestProductDto,
   ProductSortBy,
 } from './dto';
 import { PaginatedResponse } from '../common/interfaces';
 
 interface ProductFilter {
   isActive?: boolean;
+  isNew?: boolean;
   $or?: Array<{ [key: string]: { $regex: string; $options: string } }>;
   category?: ProductCategory;
   price?: { $gte?: number; $lte?: number };
-  brand?: { $regex: string; $options: string };
+  brand?: { $regex: string; $options: string } | { $in: RegExp[] };
 }
 
 @Injectable()
@@ -74,9 +76,15 @@ export class ProductsService {
       }
     }
 
-    // Brand filter
+    // Brand filter (support multiple brands separated by comma)
     if (brand) {
-      filter.brand = { $regex: brand, $options: 'i' };
+      const brands = brand.split(',').map((b) => b.trim());
+      if (brands.length === 1) {
+        filter.brand = { $regex: brands[0], $options: 'i' };
+      } else {
+        // Multiple brands - use $in with RegExp patterns
+        filter.brand = { $in: brands.map((b) => new RegExp(b, 'i')) };
+      }
     }
 
     // Sorting
@@ -130,10 +138,62 @@ export class ProductsService {
     return product;
   }
 
-  async findLatest(limit: number = 8): Promise<ProductDocument[]> {
+  async findLatest(query: QueryLatestProductDto): Promise<ProductDocument[]> {
+    const { limit = 8, minPrice, maxPrice, brand, sort } = query;
+
+    const filter: ProductFilter = {
+      isActive: true,
+      isNew: true,
+    };
+
+    // Price range filter
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      filter.price = {};
+      if (minPrice !== undefined) {
+        filter.price.$gte = minPrice;
+      }
+      if (maxPrice !== undefined) {
+        filter.price.$lte = maxPrice;
+      }
+    }
+
+    // Brand filter (support multiple brands separated by comma)
+    if (brand) {
+      const brands = brand.split(',').map((b) => b.trim());
+      if (brands.length === 1) {
+        filter.brand = { $regex: brands[0], $options: 'i' };
+      } else {
+        // Multiple brands - use $in with RegExp patterns
+        filter.brand = { $in: brands.map((b) => new RegExp(b, 'i')) };
+      }
+    }
+
+    // Sorting
+    let sortOption: Record<string, SortOrder> = { createdAt: -1 };
+    if (sort) {
+      switch (sort) {
+        case ProductSortBy.PRICE_ASC:
+          sortOption = { price: 1 };
+          break;
+        case ProductSortBy.PRICE_DESC:
+          sortOption = { price: -1 };
+          break;
+        case ProductSortBy.NAME_ASC:
+          sortOption = { name: 1 };
+          break;
+        case ProductSortBy.NAME_DESC:
+          sortOption = { name: -1 };
+          break;
+        case ProductSortBy.NEWEST:
+        default:
+          sortOption = { createdAt: -1 };
+          break;
+      }
+    }
+
     return this.productModel
-      .find({ isActive: true, isNew: true })
-      .sort({ createdAt: -1 })
+      .find(filter)
+      .sort(sortOption)
       .limit(limit)
       .exec();
   }
