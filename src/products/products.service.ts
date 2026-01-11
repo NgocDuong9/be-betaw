@@ -130,9 +130,116 @@ export class ProductsService {
     };
   }
 
+  /**
+   * Find all products for admin (including inactive products)
+   */
+  async findAllAdmin(query: QueryProductDto): Promise<PaginatedResponse<ProductDocument>> {
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      category,
+      sort,
+      minPrice,
+      maxPrice,
+      brand,
+    } = query;
+
+    const filter: ProductFilter = {};
+    // Note: No isActive filter for admin - show all products
+
+    // Search filter
+    if (search) {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { brand: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } },
+      ];
+    }
+
+    // Category filter
+    if (category) {
+      filter.category = category;
+    }
+
+    // Price range filter
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      filter.price = {};
+      if (minPrice !== undefined) {
+        filter.price.$gte = minPrice;
+      }
+      if (maxPrice !== undefined) {
+        filter.price.$lte = maxPrice;
+      }
+    }
+
+    // Brand filter (support multiple brands separated by comma)
+    if (brand) {
+      const brands = brand.split(',').map((b) => b.trim());
+      if (brands.length === 1) {
+        filter.brand = { $regex: brands[0], $options: 'i' };
+      } else {
+        filter.brand = { $in: brands.map((b) => new RegExp(b, 'i')) };
+      }
+    }
+
+    // Sorting
+    let sortOption: Record<string, SortOrder> = { createdAt: -1 };
+    if (sort) {
+      switch (sort) {
+        case ProductSortBy.PRICE_ASC:
+          sortOption = { price: 1 };
+          break;
+        case ProductSortBy.PRICE_DESC:
+          sortOption = { price: -1 };
+          break;
+        case ProductSortBy.NAME_ASC:
+          sortOption = { name: 1 };
+          break;
+        case ProductSortBy.NAME_DESC:
+          sortOption = { name: -1 };
+          break;
+        case ProductSortBy.NEWEST:
+          sortOption = { createdAt: -1 };
+          break;
+      }
+    }
+
+    const skip = (page - 1) * limit;
+
+    const [data, total] = await Promise.all([
+      this.productModel
+        .find(filter)
+        .sort(sortOption)
+        .skip(skip)
+        .limit(limit)
+        .exec(),
+      this.productModel.countDocuments(filter).exec(),
+    ]);
+
+    return {
+      data,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
   async findById(id: string): Promise<ProductDocument> {
     const product = await this.productModel.findById(id).exec();
     if (!product || !product.isActive) {
+      throw new NotFoundException('Product not found');
+    }
+    return product;
+  }
+
+  /**
+   * Find product by ID for admin (including inactive products)
+   */
+  async findByIdAdmin(id: string): Promise<ProductDocument> {
+    const product = await this.productModel.findById(id).exec();
+    if (!product) {
       throw new NotFoundException('Product not found');
     }
     return product;

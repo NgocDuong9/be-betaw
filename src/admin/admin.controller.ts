@@ -179,7 +179,29 @@ export class AdminController {
     };
   }
 
-  // ============ PRODUCT STATISTICS ============
+  // ============ PRODUCT MANAGEMENT ============
+  @Get('products')
+  @ApiOperation({ summary: 'Get all products (including inactive)' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'List of all products' })
+  async getAllProducts(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    const result = await this.productsService.findAllAdmin({
+      page: page ? parseInt(page, 10) : 1,
+      limit: limit ? parseInt(limit, 10) : 10,
+      search,
+    });
+    return {
+      success: true,
+      ...result,
+    };
+  }
+
   @Get('products/stats')
   @ApiOperation({ summary: 'Get product statistics' })
   @ApiResponse({ status: 200, description: 'Product statistics' })
@@ -188,6 +210,18 @@ export class AdminController {
     return {
       success: true,
       data: stats,
+    };
+  }
+
+  @Get('products/:id')
+  @ApiOperation({ summary: 'Get product by ID (including inactive)' })
+  @ApiParam({ name: 'id', type: String })
+  @ApiResponse({ status: 200, description: 'Product details' })
+  async getProductById(@Param('id') id: string) {
+    const product = await this.productsService.findByIdAdmin(id);
+    return {
+      success: true,
+      data: product,
     };
   }
 }
