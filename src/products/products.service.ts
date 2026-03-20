@@ -357,8 +357,10 @@ export class ProductsService {
   }
 
   async remove(id: string): Promise<void> {
-    // Hard delete - permanently remove from database
-    const result = await this.productModel.findByIdAndDelete(id).exec();
+    // Soft delete - set isActive to false instead of permanently removing
+    const result = await this.productModel
+      .findByIdAndUpdate(id, { isActive: false }, { new: true })
+      .exec();
 
     if (!result) {
       throw new NotFoundException('Product not found');
