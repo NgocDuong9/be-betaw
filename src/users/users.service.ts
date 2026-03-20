@@ -2,12 +2,14 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  BadRequestException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { User, UserDocument, UserRole } from './schemas/user.schema';
-import { CreateUserDto, UpdateUserDto } from './dto';
+import { CreateUserDto, UpdateUserDto, ChangePasswordDto } from './dto';
 
 @Injectable()
 export class UsersService {
@@ -76,6 +78,33 @@ export class UsersService {
     hashedPassword: string,
   ): Promise<boolean> {
     return bcrypt.compare(plainPassword, hashedPassword);
+  }
+
+  async changePassword(
+    userId: string,
+    changePasswordDto: ChangePasswordDto,
+  ): Promise<void> {
+    const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
+
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException('New password and confirm password do not match');
+    }
+
+    const user = await this.userModel.findById(userId).select('+password').exec();
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isPasswordValid = await this.validatePassword(
+      currentPassword,
+      user.password,
+    );
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
   }
 
   // Admin methods
