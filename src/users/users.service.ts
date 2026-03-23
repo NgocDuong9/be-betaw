@@ -10,10 +10,14 @@ import { Model } from 'mongoose';
 import * as bcrypt from 'bcryptjs';
 import { User, UserDocument, UserRole } from './schemas/user.schema';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto } from './dto';
+import { R2StorageService } from '../upload/r2-storage.service';
 
 @Injectable()
 export class UsersService {
-  constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+  constructor(
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
+    private readonly r2StorageService: R2StorageService,
+  ) {}
 
   async create(createUserDto: CreateUserDto): Promise<UserDocument> {
     const existingUser = await this.userModel.findOne({
@@ -50,7 +54,10 @@ export class UsersService {
     return this.userModel.findOne({ email: email.toLowerCase() }).exec();
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto): Promise<UserDocument> {
+  async update(
+    id: string,
+    updateUserDto: UpdateUserDto,
+  ): Promise<UserDocument> {
     if (updateUserDto.password) {
       updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
     }
@@ -87,10 +94,15 @@ export class UsersService {
     const { currentPassword, newPassword, confirmPassword } = changePasswordDto;
 
     if (newPassword !== confirmPassword) {
-      throw new BadRequestException('New password and confirm password do not match');
+      throw new BadRequestException(
+        'New password and confirm password do not match',
+      );
     }
 
-    const user = await this.userModel.findById(userId).select('+password').exec();
+    const user = await this.userModel
+      .findById(userId)
+      .select('+password')
+      .exec();
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -135,5 +147,16 @@ export class UsersService {
   async count(): Promise<number> {
     return this.userModel.countDocuments().exec();
   }
-}
 
+  // Avatar upload
+  async uploadAvatar(
+    userId: string,
+    file: Express.Multer.File,
+  ): Promise<UserDocument> {
+    const uploadResult = await this.r2StorageService.uploadFile(
+      file,
+      'avatars',
+    );
+    return this.update(userId, { avatar: uploadResult.url });
+  }
+}

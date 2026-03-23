@@ -2,17 +2,26 @@ import {
   Controller,
   Get,
   Put,
+  Post,
   Delete,
   Body,
   Param,
   UseGuards,
   Request,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiBearerAuth,
   ApiOperation,
   ApiResponse,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UpdateUserDto, ChangePasswordDto } from './dto';
@@ -67,6 +76,46 @@ export class UsersController {
     return {
       success: true,
       message: 'Password changed successfully',
+    };
+  }
+
+  @Post('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload user avatar' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Avatar image file (max 5MB)',
+        },
+      },
+      required: ['file'],
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Avatar uploaded successfully' })
+  async uploadAvatar(
+    @Request() req: { user: { userId: string } },
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /^image\/(jpeg|png|gif|webp)$/ }),
+        ],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    const user = await this.usersService.uploadAvatar(req.user.userId, file);
+    return {
+      success: true,
+      data: user,
+      message: 'Avatar uploaded successfully',
     };
   }
 
